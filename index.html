@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escala de Voos do Kaio</title>
+    <style>
+        :root {
+            --azul-aviacao: #1e3a8a;
+            --fundo-pagina: #f3f4f6;
+            --fundo-card: #ffffff;
+            --texto-principal: #1f2937;
+            --destaque: #3b82f6;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--fundo-pagina);
+            color: var(--texto-principal);
+        }
+        
+        header {
+            background-color: var(--azul-aviacao);
+            color: white;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        header h1 {
+            margin: 0;
+            font-size: 2rem;
+            letter-spacing: 1px;
+        }
+        
+        #relogio-bsb {
+            margin-top: 0.5rem;
+            font-size: 1.1rem;
+            font-weight: 300;
+            color: #d1d5db;
+        }
+        
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+            gap: 2rem;
+        }
+        
+        .mapa-container {
+            flex: 1 1 50%;
+            background: var(--fundo-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            min-height: 400px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .mapa-container img {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+        
+        .escala-container {
+            flex: 1 1 40%;
+            background: var(--fundo-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            height: fit-content;
+        }
+        
+        .voo-card {
+            background: var(--fundo-pagina);
+            border-left: 5px solid var(--azul-aviacao);
+            padding: 1.2rem;
+            margin-bottom: 1rem;
+            border-radius: 6px;
+        }
+        
+        .voo-card strong {
+            display: block;
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            color: var(--azul-aviacao);
+        }
+        
+        .status-api {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e0f2fe;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            color: #0369a1;
+            margin-bottom: 10px;
+        }
+
+        .btn-rastrear {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background-color: var(--azul-aviacao);
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            transition: background-color 0.2s;
+        }
+        
+        .btn-rastrear:hover {
+            background-color: #152c6b;
+        }
+
+        .folga-msg {
+            text-align: center;
+            color: #6b7280;
+            font-size: 1.1rem;
+            padding: 2rem;
+        }
+
+        @media (max-width: 800px) {
+            .container { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Escala de Voos do Kaio</h1>
+        <div id="relogio-bsb">Carregando horário...</div>
+    </header>
+
+    <div class="container">
+        <div class="mapa-container" id="visualizacao-esquerda">
+            <div class="folga-msg">Carregando dados da escala...</div>
+        </div>
+
+        <div class="escala-container">
+            <h2>Programação de Hoje</h2>
+            <div id="lista-voos">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        // =========================================================
+        // CONFIGURAÇÕES DA API E IMAGENS
+        // =========================================================
+        const FLIGHTAWARE_API_KEY = "Humva6VAkBqrtxZYa97bUvblPhByZLoI"; 
+        // Imagem estática para os dias de DO (Folga)
+        const imagemFolga = "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=1200&auto=format&fit=crop";
+
+        // =========================================================
+        // LÓGICA DO SISTEMA
+        // =========================================================
+
+        function atualizarRelogio() {
+            const agora = new Date();
+            const opcoes = { timeZone: 'America/Sao_Paulo', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+            document.getElementById('relogio-bsb').innerText = agora.toLocaleDateString('pt-BR', opcoes) + ' (BRT)';
+        }
+        setInterval(atualizarRelogio, 1000);
+        atualizarRelogio();
+
+        // Leitura da nova estrutura do CSV
+        async function carregarCSV() {
+            try {
+                // Força o navegador a pegar a versão mais recente do arquivo
+                const resposta = await fetch('escala.csv?v=' + new Date().getTime());
+                if (!resposta.ok) throw new Error("Arquivo CSV não encontrado.");
+                const textoCsv = await resposta.text();
+                processarEscala(textoCsv);
+            } catch (erro) {
+                document.getElementById('lista-voos').innerHTML = `<div class="folga-msg" style="color: #ef4444;">Erro ao carregar a escala.<br>Certifique-se de que o arquivo <b>escala.csv</b> está na mesma pasta do site.</div>`;
+            }
+        }
+
+        function processarEscala(csv) {
+            const linhas = csv.split('\n');
+            const escalaFormatada = {};
+
+            // Pula o cabeçalho (linha 0) e processa as demais
+            for (let i = 1; i < linhas.length; i++) {
+                if (!linhas[i].trim()) continue; // Pula linhas vazias
+                
+                // Nova estrutura: Data, Voo, Aeroporto de Partida, Aeroporto de Chegada, Horário de Partida, Horário de Chegada
+                const colunas = linhas[i].split(',');
+                
+                // Verifica se a linha tem as 6 colunas esperadas
+                if (colunas.length >= 6) {
+                    const data = colunas[0].trim();
+                    const voo = colunas[1].trim();
+                    const aeroPartida = colunas[2].trim();
+                    const aeroChegada = colunas[3].trim();
+                    const horaPartida = colunas[4].trim();
+                    const horaChegada = colunas[5].trim().replace('\r', ''); // Remove quebra de linha residual do CSV
+                    
+                    if (!escalaFormatada[data]) {
+                        escalaFormatada[data] = [];
+                    }
+                    
+                    escalaFormatada[data].push({
+                        voo: voo,
+                        origem: aeroPartida,
+                        destino: aeroChegada,
+                        horarioPartida: horaPartida,
+                        horarioChegada: horaChegada
+                    });
+                }
+            }
+
+            verificarVoosDeHoje(escalaFormatada);
+        }
+
+        async function verificarVoosDeHoje(escala) {
+            const hoje = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+            const ano = hoje.getFullYear();
+            const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+            const dia = String(hoje.getDate()).padStart(2, '0');
+            const dataHojeString = `${ano}-${mes}-${dia}`;
+            
+            const voosDeHoje = escala[dataHojeString];
+            const painelVoos = document.getElementById('lista-voos');
+            const painelVisual = document.getElementById('visualizacao-esquerda');
+
+            if (voosDeHoje && voosDeHoje.length > 0) {
+                painelVisual.innerHTML = `<h2 style="color: var(--azul-aviacao); margin-top: 0;">Status de Rastreamento</h2><div id="painel-api" style="width: 100%; text-align: left;">Processando dados dos voos de hoje...</div>`;
+                let htmlVoos = '';
+                let htmlApi = '';
+
+                for (const voo of voosDeHoje) {
+                    // Monta os cards com os horários separados
+                    htmlVoos += `
+                        <div class="voo-card">
+                            <strong>Voo ${voo.voo}</strong>
+                            <div>🛫 <b>De:</b> ${voo.origem} (${voo.horarioPartida})</div>
+                            <div>🛬 <b>Para:</b> ${voo.destino} (${voo.horarioChegada})</div>
+                            <a href="https://pt.flightaware.com/live/flight/${voo.voo}" target="_blank" class="btn-rastrear">Abrir Mapa do Voo</a>
+                        </div>
+                    `;
+
+                    // Requisição para a AeroAPI FlightAware
+                    try {
+                        const apiResponse = await fetch(`https://aeroapi.flightaware.com/aeroapi/flights/${voo.voo}`, {
+                            method: "GET",
+                            headers: { 
+                                "x-apikey": FLIGHTAWARE_API_KEY,
+                                "Accept": "application/json; charset=UTF-8"
+                            }
+                        });
+                        
+                        if (apiResponse.ok) {
+                            const dataApi = await apiResponse.json();
+                            if (dataApi.flights && dataApi.flights.length > 0) {
+                                // Pega o status do voo mais recente retornado
+                                const statusAtual = dataApi.flights[0].status || "Status indisponível no momento.";
+                                htmlApi += `<div class="status-api">✈️ <b>${voo.voo}:</b> ${statusAtual}</div>`;
+                            } else {
+                                htmlApi += `<div class="status-api">⚠️ <b>${voo.voo}:</b> Voo ainda não entrou no sistema de rastreamento.</div>`;
+                            }
+                        } else {
+                            htmlApi += `<div class="status-api" style="background-color: #fee2e2; color: #991b1b;">❌ <b>${voo.voo}:</b> Erro ao buscar dados na API.</div>`;
+                        }
+                    } catch (e) {
+                        htmlApi += `<div class="status-api" style="background-color: #fef9c3; color: #854d0e;">🔒 <b>${voo.voo}:</b> Bloqueio de segurança do navegador (CORS). Utilize o botão azul no card para ver o mapa ao vivo.</div>`;
+                    }
+                }
+
+                painelVoos.innerHTML = htmlVoos;
+                document.getElementById('painel-api').innerHTML = htmlApi;
+
+            } else {
+                painelVoos.innerHTML = `<div class="folga-msg">Sem voos programados para hoje.<br><br><b>Aproveitando a folga!</b> ☕</div>`;
+                painelVisual.innerHTML = `<img src="${imagemFolga}" alt="Imagem de Folga">`;
+            }
+        }
+
+        // Inicia a execução do script
+        carregarCSV();
+    </script>
+</body>
+</html>
