@@ -76,6 +76,7 @@
             border: none;
             border-radius: 8px;
             min-height: 400px;
+            background-color: #111; /* Fundo escuro padrão do radar */
         }
         
         .escala-container {
@@ -95,7 +96,6 @@
             border-radius: 6px;
         }
 
-        /* Cores para os status especiais */
         .card-folga { border-left-color: #10b981; }
         .card-reserva { border-left-color: #f59e0b; }
         .card-treino { border-left-color: #8b5cf6; }
@@ -245,7 +245,7 @@
                             descricao = "De prontidão no aeroporto.";
                         } else if (item.voo === "TREI") { 
                             titulo = "Treinamento (TREI)"; icone = "📚"; classeCard = "card-treino";
-                            descricao = "Dia de Treinamento";
+                            descricao = "Dia de treinamento";
                         }
 
                         htmlVoos += `
@@ -269,11 +269,11 @@
 
                 painelVoos.innerHTML = htmlVoos;
 
-                // Sempre que houver pelo menos 1 voo comercial no dia, exibe o mapa estático da América do Sul
+                // Embutindo o mapa do ADS-B Exchange focado no Brasil/América do Sul (zoom 4)
                 if (temVooComercial) {
                     painelVisual.innerHTML = `
                         <h2 style="color: var(--azul-aviacao); margin-top: 0; align-self: flex-start;">Radar América do Sul</h2>
-                        <iframe src="https://www.flightradar24.com/simple_index.php?lat=-15.0&lon=-55.0&z=4" title="Rastreador de Voos"></iframe>
+                        <iframe src="https://globe.adsbexchange.com/?lat=-15.0&lon=-55.0&zoom=4" title="Rastreador de Voos"></iframe>
                     `;
                 } else {
                     painelVisual.innerHTML = `<img src="${imagemFolga}" alt="Imagem do dia">`;
