@@ -75,7 +75,7 @@
             flex-grow: 1;
             border: none;
             border-radius: 8px;
-            min-height: 350px;
+            min-height: 400px;
         }
         
         .escala-container {
@@ -96,9 +96,9 @@
         }
 
         /* Cores para os status especiais */
-        .card-folga { border-left-color: #10b981; } /* Verde */
-        .card-reserva { border-left-color: #f59e0b; } /* Laranja */
-        .card-treino { border-left-color: #8b5cf6; } /* Roxo */
+        .card-folga { border-left-color: #10b981; }
+        .card-reserva { border-left-color: #f59e0b; }
+        .card-treino { border-left-color: #8b5cf6; }
         
         .voo-card strong {
             display: block;
@@ -107,17 +107,6 @@
             color: var(--texto-principal);
         }
         
-        .status-api {
-            margin-top: 15px;
-            padding: 10px;
-            background-color: #e0f2fe;
-            border-radius: 6px;
-            font-size: 0.85rem;
-            color: #0369a1;
-            width: 100%;
-            box-sizing: border-box;
-        }
-
         .btn-rastrear {
             display: inline-block;
             margin-top: 10px;
@@ -129,6 +118,7 @@
             font-weight: bold;
             font-size: 0.9rem;
             transition: background-color 0.2s;
+            text-align: center;
         }
         
         .btn-rastrear:hover {
@@ -167,7 +157,6 @@
     </div>
 
     <script>
-        const FLIGHTAWARE_API_KEY = "Humva6VAkBqrtxZYa97bUvblPhByZLoI"; 
         const imagemFolga = "https://imgproc.airliners.net/photos/airliners/3/7/0/7044073.jpg?v=v40cdfd2ba1c=80&w=1200&auto=format&fit=crop";
 
         function atualizarRelogio() {
@@ -223,7 +212,7 @@
             verificarVoosDeHoje(escalaFormatada);
         }
 
-        async function verificarVoosDeHoje(escala) {
+        function verificarVoosDeHoje(escala) {
             const hoje = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
             const ano = hoje.getFullYear();
             const mes = String(hoje.getMonth() + 1).padStart(2, '0');
@@ -236,7 +225,6 @@
 
             if (voosDeHoje && voosDeHoje.length > 0) {
                 let htmlVoos = '';
-                let htmlApi = '';
                 let temVooComercial = false;
 
                 for (const item of voosDeHoje) {
@@ -251,13 +239,13 @@
                             descricao = "Dia livre! Aproveitando a folga.";
                         } else if (item.voo === "HSB") { 
                             titulo = "Sobreaviso (HSB)"; icone = "📱"; classeCard = "card-reserva";
-                            descricao = "Aguardando chamado em casa ou no hotel.";
+                            descricao = "Aguardando chamado em casa.";
                         } else if (item.voo === "ASB") { 
                             titulo = "Reserva (ASB)"; icone = "✈️"; classeCard = "card-reserva";
                             descricao = "De prontidão no aeroporto.";
                         } else if (item.voo === "TREI") { 
                             titulo = "Treinamento (TREI)"; icone = "📚"; classeCard = "card-treino";
-                            descricao = "Dia de capacitação e reciclagem.";
+                            descricao = "Dia de Treinamento";
                         }
 
                         htmlVoos += `
@@ -276,38 +264,16 @@
                                 <a href="https://pt.flightaware.com/live/flight/${item.voo}" target="_blank" class="btn-rastrear">Abrir Mapa do Voo</a>
                             </div>
                         `;
-
-                        try {
-                            const apiResponse = await fetch(`https://aeroapi.flightaware.com/aeroapi/flights/${item.voo}`, {
-                                method: "GET",
-                                headers: { "x-apikey": FLIGHTAWARE_API_KEY, "Accept": "application/json; charset=UTF-8" }
-                            });
-                            
-                            if (apiResponse.ok) {
-                                const dataApi = await apiResponse.json();
-                                if (dataApi.flights && dataApi.flights.length > 0) {
-                                    const statusAtual = dataApi.flights[0].status || "Status indisponível.";
-                                    htmlApi += `<div class="status-api">✈️ <b>${item.voo}:</b> ${statusAtual}</div>`;
-                                } else {
-                                    htmlApi += `<div class="status-api">⚠️ <b>${item.voo}:</b> Voo ainda não entrou no sistema.</div>`;
-                                }
-                            } else {
-                                htmlApi += `<div class="status-api" style="background-color: #fee2e2; color: #991b1b;">❌ <b>${item.voo}:</b> Erro ao buscar dados na API.</div>`;
-                            }
-                        } catch (e) {
-                            htmlApi += `<div class="status-api" style="background-color: #fef9c3; color: #854d0e; text-align: center;">🔒 Voo <b>${item.voo}</b>: Utilize o botão azul no card para rastrear o avião.</div>`;
-                        }
                     }
                 }
 
                 painelVoos.innerHTML = htmlVoos;
 
-                // Aqui está a mágica: Se houver voo comercial, carrega o mapa da América do Sul!
+                // Sempre que houver pelo menos 1 voo comercial no dia, exibe o mapa estático da América do Sul
                 if (temVooComercial) {
                     painelVisual.innerHTML = `
                         <h2 style="color: var(--azul-aviacao); margin-top: 0; align-self: flex-start;">Radar América do Sul</h2>
                         <iframe src="https://www.flightradar24.com/simple_index.php?lat=-15.0&lon=-55.0&z=4" title="Rastreador de Voos"></iframe>
-                        <div id="painel-api" style="width: 100%; text-align: left;">${htmlApi}</div>
                     `;
                 } else {
                     painelVisual.innerHTML = `<img src="${imagemFolga}" alt="Imagem do dia">`;
