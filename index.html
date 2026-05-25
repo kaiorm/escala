@@ -51,14 +51,13 @@
         }
         
         .mapa-container {
-            flex: 1 1 50%;
+            flex: 1 1 55%;
             background: var(--fundo-card);
             border-radius: 12px;
             padding: 1.5rem;
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            min-height: 500px;
+            min-height: 400px;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
         }
@@ -69,18 +68,9 @@
             border-radius: 8px;
             object-fit: cover;
         }
-
-        .mapa-container iframe {
-            width: 100%;
-            flex-grow: 1;
-            border: none;
-            border-radius: 8px;
-            min-height: 400px;
-            background-color: #111; /* Fundo escuro padrão do radar */
-        }
         
         .escala-container {
-            flex: 1 1 40%;
+            flex: 1 1 35%;
             background: var(--fundo-card);
             border-radius: 12px;
             padding: 1.5rem;
@@ -157,7 +147,10 @@
     </div>
 
     <script>
-        const imagemFolga = "https://imgproc.airliners.net/photos/airliners/3/7/0/7044073.jpg?v=v40cdfd2ba1c=80&w=1200&auto=format&fit=crop";
+        // Imagem para dias de voo comercial (LATAM 787)
+        const imagemVoo = "https://www.airway.com.br/wp-content/uploads/2021/09/787-9-latam-voo.jpg";
+        // Imagem para dias de folga (DO, HSB, ASB, TREI)
+        const imagemFolga = "https://www.aviacionnews.com/wp-content/uploads/2024/10/327845_LATAM-7879_vw35-altB-Roll_HD-1223-1-1920x1080.jpg=80&w=1200&auto=format&fit=crop";
 
         function atualizarRelogio() {
             const agora = new Date();
@@ -245,7 +238,7 @@
                             descricao = "De prontidão no aeroporto.";
                         } else if (item.voo === "TREI") { 
                             titulo = "Treinamento (TREI)"; icone = "📚"; classeCard = "card-treino";
-                            descricao = "Dia de treinamento";
+                            descricao = "Dia de treinamento.";
                         }
 
                         htmlVoos += `
@@ -256,12 +249,13 @@
                         `;
                     } else {
                         temVooComercial = true;
+                        // O link agora direciona para a página de dados do voo no FlightRadar24
                         htmlVoos += `
                             <div class="voo-card">
                                 <strong style="color: var(--azul-aviacao);">Voo ${item.voo}</strong>
                                 <div>🛫 <b>De:</b> ${item.origem} (${item.horarioPartida})</div>
                                 <div>🛬 <b>Para:</b> ${item.destino} (${item.horarioChegada})</div>
-                                <a href="https://pt.flightaware.com/live/flight/${item.voo}" target="_blank" class="btn-rastrear">Abrir Mapa do Voo</a>
+                                <a href="https://www.flightradar24.com/data/flights/${item.voo}" target="_blank" class="btn-rastrear">Abrir no FlightRadar24</a>
                             </div>
                         `;
                     }
@@ -269,14 +263,11 @@
 
                 painelVoos.innerHTML = htmlVoos;
 
-                // Embutindo o mapa do ADS-B Exchange focado no Brasil/América do Sul (zoom 4)
+                // Se houver voo comercial, mostra a foto do LATAM 787. Senão, mostra a imagem de folga.
                 if (temVooComercial) {
-                    painelVisual.innerHTML = `
-                        <h2 style="color: var(--azul-aviacao); margin-top: 0; align-self: flex-start;">Radar América do Sul</h2>
-                        <iframe src="https://globe.adsbexchange.com/?lat=-15.0&lon=-55.0&zoom=4" title="Rastreador de Voos"></iframe>
-                    `;
+                    painelVisual.innerHTML = `<img src="${imagemVoo}" alt="Aeronave em voo">`;
                 } else {
-                    painelVisual.innerHTML = `<img src="${imagemFolga}" alt="Imagem do dia">`;
+                    painelVisual.innerHTML = `<img src="${imagemFolga}" alt="Imagem de dia livre">`;
                 }
 
             } else {
