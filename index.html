@@ -10,7 +10,6 @@
             --fundo-pagina: #f3f4f6;
             --fundo-card: #ffffff;
             --texto-principal: #1f2937;
-            --destaque: #3b82f6;
         }
         
         body {
@@ -87,12 +86,17 @@
             margin-bottom: 1rem;
             border-radius: 6px;
         }
+
+        /* Cores para os status especiais */
+        .card-folga { border-left-color: #10b981; } /* Verde */
+        .card-reserva { border-left-color: #f59e0b; } /* Laranja */
+        .card-treino { border-left-color: #8b5cf6; } /* Roxo */
         
         .voo-card strong {
             display: block;
             font-size: 1.2rem;
             margin-bottom: 0.5rem;
-            color: var(--azul-aviacao);
+            color: var(--texto-principal);
         }
         
         .status-api {
@@ -154,16 +158,8 @@
     </div>
 
     <script>
-        // =========================================================
-        // CONFIGURAÇÕES DA API E IMAGENS
-        // =========================================================
         const FLIGHTAWARE_API_KEY = "Humva6VAkBqrtxZYa97bUvblPhByZLoI"; 
-        // Imagem estática para os dias de DO (Folga)
-        const imagemFolga = "https://blogdospotter.com.br/wp-content/uploads/2022/04/IMG_8842-scaled.jpg";
-
-        // =========================================================
-        // LÓGICA DO SISTEMA
-        // =========================================================
+        const imagemFolga = "https://imgproc.airliners.net/photos/airliners/3/7/0/7044073.jpg?v=v40cdfd2ba1c";
 
         function atualizarRelogio() {
             const agora = new Date();
@@ -173,16 +169,14 @@
         setInterval(atualizarRelogio, 1000);
         atualizarRelogio();
 
-        // Leitura da nova estrutura do CSV
         async function carregarCSV() {
             try {
-                // Força o navegador a pegar a versão mais recente do arquivo
                 const resposta = await fetch('escala.csv?v=' + new Date().getTime());
                 if (!resposta.ok) throw new Error("Arquivo CSV não encontrado.");
                 const textoCsv = await resposta.text();
                 processarEscala(textoCsv);
             } catch (erro) {
-                document.getElementById('lista-voos').innerHTML = `<div class="folga-msg" style="color: #ef4444;">Erro ao carregar a escala.<br>Certifique-se de que o arquivo <b>escala.csv</b> está na mesma pasta do site.</div>`;
+                document.getElementById('lista-voos').innerHTML = `<div class="folga-msg" style="color: #ef4444;">Erro ao carregar a escala.<br>Certifique-se de que o arquivo <b>escala.csv</b> está na mesma pasta.</div>`;
             }
         }
 
@@ -190,21 +184,20 @@
             const linhas = csv.split('\n');
             const escalaFormatada = {};
 
-            // Pula o cabeçalho (linha 0) e processa as demais
             for (let i = 1; i < linhas.length; i++) {
-                if (!linhas[i].trim()) continue; // Pula linhas vazias
+                if (!linhas[i].trim()) continue;
                 
-                // Nova estrutura: Data, Voo, Aeroporto de Partida, Aeroporto de Chegada, Horário de Partida, Horário de Chegada
-                const colunas = linhas[i].split(',');
+                // Agora aceita tanto vírgula quanto ponto-e-vírgula do Excel
+                const colunas = linhas[i].split(/[,;]/);
                 
-                // Verifica se a linha tem as 6 colunas esperadas
-                if (colunas.length >= 6) {
+                if (colunas.length >= 2) { // Pelo menos data e voo/status precisam existir
                     const data = colunas[0].trim();
-                    const voo = colunas[1].trim();
-                    const aeroPartida = colunas[2].trim();
-                    const aeroChegada = colunas[3].trim();
-                    const horaPartida = colunas[4].trim();
-                    const horaChegada = colunas[5].trim().replace('\r', ''); // Remove quebra de linha residual do CSV
+                    const voo = colunas[1].trim().toUpperCase();
+                    // Como em dias de folga você pode deixar as outras colunas vazias, garantimos que não dê erro
+                    const aeroPartida = colunas[2] ? colunas[2].trim() : "";
+                    const aeroChegada = colunas[3] ? colunas[3].trim() : "";
+                    const horaPartida = colunas[4] ? colunas[4].trim() : "";
+                    const horaChegada = colunas[5] ? colunas[5].trim().replace('\r', '') : "";
                     
                     if (!escalaFormatada[data]) {
                         escalaFormatada[data] = [];
@@ -235,50 +228,82 @@
             const painelVisual = document.getElementById('visualizacao-esquerda');
 
             if (voosDeHoje && voosDeHoje.length > 0) {
-                painelVisual.innerHTML = `<h2 style="color: var(--azul-aviacao); margin-top: 0;">Status de Rastreamento</h2><div id="painel-api" style="width: 100%; text-align: left;">Processando dados dos voos de hoje...</div>`;
                 let htmlVoos = '';
                 let htmlApi = '';
+                let temVooComercial = false;
 
-                for (const voo of voosDeHoje) {
-                    // Monta os cards com os horários separados
-                    htmlVoos += `
-                        <div class="voo-card">
-                            <strong>Voo ${voo.voo}</strong>
-                            <div>🛫 <b>De:</b> ${voo.origem} (${voo.horarioPartida})</div>
-                            <div>🛬 <b>Para:</b> ${voo.destino} (${voo.horarioChegada})</div>
-                            <a href="https://pt.flightaware.com/live/flight/${voo.voo}" target="_blank" class="btn-rastrear">Abrir Mapa do Voo</a>
-                        </div>
-                    `;
+                for (const item of voosDeHoje) {
+                    // Verifica se é um status especial
+                    if (["DO", "HSB", "ASB", "TREI"].includes(item.voo)) {
+                        let titulo = "";
+                        let icone = "";
+                        let classeCard = "";
+                        let descricao = "";
 
-                    // Requisição para a AeroAPI FlightAware
-                    try {
-                        const apiResponse = await fetch(`https://aeroapi.flightaware.com/aeroapi/flights/${voo.voo}`, {
-                            method: "GET",
-                            headers: { 
-                                "x-apikey": FLIGHTAWARE_API_KEY,
-                                "Accept": "application/json; charset=UTF-8"
-                            }
-                        });
-                        
-                        if (apiResponse.ok) {
-                            const dataApi = await apiResponse.json();
-                            if (dataApi.flights && dataApi.flights.length > 0) {
-                                // Pega o status do voo mais recente retornado
-                                const statusAtual = dataApi.flights[0].status || "Status indisponível no momento.";
-                                htmlApi += `<div class="status-api">✈️ <b>${voo.voo}:</b> ${statusAtual}</div>`;
-                            } else {
-                                htmlApi += `<div class="status-api">⚠️ <b>${voo.voo}:</b> Voo ainda não entrou no sistema de rastreamento.</div>`;
-                            }
-                        } else {
-                            htmlApi += `<div class="status-api" style="background-color: #fee2e2; color: #991b1b;">❌ <b>${voo.voo}:</b> Erro ao buscar dados na API.</div>`;
+                        if (item.voo === "DO") { 
+                            titulo = "Folga (DO)"; icone = "🏖️"; classeCard = "card-folga"; 
+                            descricao = "Dia livre! Aproveitando a folga.";
+                        } else if (item.voo === "HSB") { 
+                            titulo = "Sobreaviso (HSB)"; icone = "📱"; classeCard = "card-reserva";
+                            descricao = "Aguardando chamado em casa ou no hotel.";
+                        } else if (item.voo === "ASB") { 
+                            titulo = "Reserva (ASB)"; icone = "✈️"; classeCard = "card-reserva";
+                            descricao = "De prontidão no aeroporto.";
+                        } else if (item.voo === "TREI") { 
+                            titulo = "Treinamento (TREI)"; icone = "📚"; classeCard = "card-treino";
+                            descricao = "Dia de capacitação e reciclagem.";
                         }
-                    } catch (e) {
-                        htmlApi += `<div class="status-api" style="background-color: #fef9c3; color: #854d0e;">🔒 <b>${voo.voo}:</b> Bloqueio de segurança do navegador (CORS). Utilize o botão azul no card para ver o mapa ao vivo.</div>`;
+
+                        htmlVoos += `
+                            <div class="voo-card ${classeCard}">
+                                <strong style="color: inherit;">${icone} ${titulo}</strong>
+                                <div>${descricao}</div>
+                            </div>
+                        `;
+                    } else {
+                        // É um voo normal
+                        temVooComercial = true;
+                        htmlVoos += `
+                            <div class="voo-card">
+                                <strong style="color: var(--azul-aviacao);">Voo ${item.voo}</strong>
+                                <div>🛫 <b>De:</b> ${item.origem} (${item.horarioPartida})</div>
+                                <div>🛬 <b>Para:</b> ${item.destino} (${item.horarioChegada})</div>
+                                <a href="https://pt.flightaware.com/live/flight/${item.voo}" target="_blank" class="btn-rastrear">Abrir Mapa do Voo</a>
+                            </div>
+                        `;
+
+                        // Busca na API apenas se for voo normal
+                        try {
+                            const apiResponse = await fetch(`https://aeroapi.flightaware.com/aeroapi/flights/${item.voo}`, {
+                                method: "GET",
+                                headers: { "x-apikey": FLIGHTAWARE_API_KEY, "Accept": "application/json; charset=UTF-8" }
+                            });
+                            
+                            if (apiResponse.ok) {
+                                const dataApi = await apiResponse.json();
+                                if (dataApi.flights && dataApi.flights.length > 0) {
+                                    const statusAtual = dataApi.flights[0].status || "Status indisponível.";
+                                    htmlApi += `<div class="status-api">✈️ <b>${item.voo}:</b> ${statusAtual}</div>`;
+                                } else {
+                                    htmlApi += `<div class="status-api">⚠️ <b>${item.voo}:</b> Voo ainda não entrou no sistema.</div>`;
+                                }
+                            } else {
+                                htmlApi += `<div class="status-api" style="background-color: #fee2e2; color: #991b1b;">❌ <b>${item.voo}:</b> Erro ao buscar dados na API.</div>`;
+                            }
+                        } catch (e) {
+                            htmlApi += `<div class="status-api" style="background-color: #fef9c3; color: #854d0e;">🔒 <b>${item.voo}:</b> Bloqueio de segurança do navegador (CORS). Utilize o botão azul no card.</div>`;
+                        }
                     }
                 }
 
                 painelVoos.innerHTML = htmlVoos;
-                document.getElementById('painel-api').innerHTML = htmlApi;
+
+                // Se teve voo, mostra o painel da API. Se foi só folga/treinamento, mostra a imagem.
+                if (temVooComercial) {
+                    painelVisual.innerHTML = `<h2 style="color: var(--azul-aviacao); margin-top: 0;">Status de Rastreamento</h2><div id="painel-api" style="width: 100%; text-align: left;">${htmlApi}</div>`;
+                } else {
+                    painelVisual.innerHTML = `<img src="${imagemFolga}" alt="Imagem do dia">`;
+                }
 
             } else {
                 painelVoos.innerHTML = `<div class="folga-msg">Sem voos programados para hoje.<br><br><b>Aproveitando a folga!</b> ☕</div>`;
@@ -286,7 +311,6 @@
             }
         }
 
-        // Inicia a execução do script
         carregarCSV();
     </script>
 </body>
