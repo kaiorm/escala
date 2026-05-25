@@ -56,7 +56,7 @@
             border-radius: 12px;
             padding: 1.5rem;
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            min-height: 400px;
+            min-height: 500px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -68,6 +68,14 @@
             height: 100%;
             border-radius: 8px;
             object-fit: cover;
+        }
+
+        .mapa-container iframe {
+            width: 100%;
+            flex-grow: 1;
+            border: none;
+            border-radius: 8px;
+            min-height: 350px;
         }
         
         .escala-container {
@@ -100,13 +108,14 @@
         }
         
         .status-api {
-            margin-top: 10px;
+            margin-top: 15px;
             padding: 10px;
             background-color: #e0f2fe;
             border-radius: 6px;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: #0369a1;
-            margin-bottom: 10px;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         .btn-rastrear {
@@ -159,7 +168,7 @@
 
     <script>
         const FLIGHTAWARE_API_KEY = "Humva6VAkBqrtxZYa97bUvblPhByZLoI"; 
-        const imagemFolga = "https://imgproc.airliners.net/photos/airliners/3/7/0/7044073.jpg?v=v40cdfd2ba1c";
+        const imagemFolga = "https://imgproc.airliners.net/photos/airliners/3/7/0/7044073.jpg?v=v40cdfd2ba1c=80&w=1200&auto=format&fit=crop";
 
         function atualizarRelogio() {
             const agora = new Date();
@@ -187,13 +196,11 @@
             for (let i = 1; i < linhas.length; i++) {
                 if (!linhas[i].trim()) continue;
                 
-                // Agora aceita tanto vírgula quanto ponto-e-vírgula do Excel
                 const colunas = linhas[i].split(/[,;]/);
                 
-                if (colunas.length >= 2) { // Pelo menos data e voo/status precisam existir
+                if (colunas.length >= 2) { 
                     const data = colunas[0].trim();
                     const voo = colunas[1].trim().toUpperCase();
-                    // Como em dias de folga você pode deixar as outras colunas vazias, garantimos que não dê erro
                     const aeroPartida = colunas[2] ? colunas[2].trim() : "";
                     const aeroChegada = colunas[3] ? colunas[3].trim() : "";
                     const horaPartida = colunas[4] ? colunas[4].trim() : "";
@@ -233,7 +240,6 @@
                 let temVooComercial = false;
 
                 for (const item of voosDeHoje) {
-                    // Verifica se é um status especial
                     if (["DO", "HSB", "ASB", "TREI"].includes(item.voo)) {
                         let titulo = "";
                         let icone = "";
@@ -261,7 +267,6 @@
                             </div>
                         `;
                     } else {
-                        // É um voo normal
                         temVooComercial = true;
                         htmlVoos += `
                             <div class="voo-card">
@@ -272,7 +277,6 @@
                             </div>
                         `;
 
-                        // Busca na API apenas se for voo normal
                         try {
                             const apiResponse = await fetch(`https://aeroapi.flightaware.com/aeroapi/flights/${item.voo}`, {
                                 method: "GET",
@@ -291,16 +295,20 @@
                                 htmlApi += `<div class="status-api" style="background-color: #fee2e2; color: #991b1b;">❌ <b>${item.voo}:</b> Erro ao buscar dados na API.</div>`;
                             }
                         } catch (e) {
-                            htmlApi += `<div class="status-api" style="background-color: #fef9c3; color: #854d0e;">🔒 <b>${item.voo}:</b> Bloqueio de segurança do navegador (CORS). Utilize o botão azul no card.</div>`;
+                            htmlApi += `<div class="status-api" style="background-color: #fef9c3; color: #854d0e; text-align: center;">🔒 Voo <b>${item.voo}</b>: Utilize o botão azul no card para rastrear o avião.</div>`;
                         }
                     }
                 }
 
                 painelVoos.innerHTML = htmlVoos;
 
-                // Se teve voo, mostra o painel da API. Se foi só folga/treinamento, mostra a imagem.
+                // Aqui está a mágica: Se houver voo comercial, carrega o mapa da América do Sul!
                 if (temVooComercial) {
-                    painelVisual.innerHTML = `<h2 style="color: var(--azul-aviacao); margin-top: 0;">Status de Rastreamento</h2><div id="painel-api" style="width: 100%; text-align: left;">${htmlApi}</div>`;
+                    painelVisual.innerHTML = `
+                        <h2 style="color: var(--azul-aviacao); margin-top: 0; align-self: flex-start;">Radar América do Sul</h2>
+                        <iframe src="https://www.flightradar24.com/simple_index.php?lat=-15.0&lon=-55.0&z=4" title="Rastreador de Voos"></iframe>
+                        <div id="painel-api" style="width: 100%; text-align: left;">${htmlApi}</div>
+                    `;
                 } else {
                     painelVisual.innerHTML = `<img src="${imagemFolga}" alt="Imagem do dia">`;
                 }
