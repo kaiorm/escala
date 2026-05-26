@@ -48,10 +48,11 @@
             margin: 2rem auto;
             padding: 0 1.5rem;
             gap: 2rem;
+            align-items: flex-start;
         }
         
         .mapa-container {
-            flex: 1 1 55%;
+            flex: 1 1 50%;
             background: var(--fundo-card);
             border-radius: 12px;
             padding: 1.5rem;
@@ -60,6 +61,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            position: sticky;
+            top: 2rem;
         }
         
         .mapa-container img {
@@ -70,12 +73,54 @@
         }
         
         .escala-container {
-            flex: 1 1 35%;
+            flex: 1 1 40%;
             background: var(--fundo-card);
             border-radius: 12px;
             padding: 1.5rem;
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            height: fit-content;
+        }
+
+        .contador-folga {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+        }
+
+        .contador-folga h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.3rem;
+        }
+
+        .contador-folga p {
+            margin: 0;
+            font-size: 1.05rem;
+            opacity: 0.95;
+        }
+
+        .dia-bloco {
+            margin-bottom: 2rem;
+            border-bottom: 2px dashed #e5e7eb;
+            padding-bottom: 1rem;
+        }
+
+        .dia-bloco:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .dia-titulo {
+            color: var(--azul-aviacao);
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-size: 1.4rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
         
         .voo-card {
@@ -89,6 +134,7 @@
         .card-folga { border-left-color: #10b981; }
         .card-reserva { border-left-color: #f59e0b; }
         .card-treino { border-left-color: #8b5cf6; }
+        .card-vazio { border-left-color: #9ca3af; background: #f9fafb;}
         
         .voo-card strong {
             display: block;
@@ -124,6 +170,7 @@
 
         @media (max-width: 800px) {
             .container { flex-direction: column; }
+            .mapa-container { position: static; }
         }
     </style>
 </head>
@@ -140,17 +187,15 @@
         </div>
 
         <div class="escala-container">
-            <h2>Programação de Hoje</h2>
+            <div id="painel-contador"></div>
             <div id="lista-voos">
                 </div>
         </div>
     </div>
 
     <script>
-        // Imagem para dias de voo comercial (LATAM 787)
         const imagemVoo = "https://www.airway.com.br/wp-content/uploads/2021/09/787-9-latam-voo.jpg";
-        // Imagem para dias de folga (DO, HSB, ASB, TREI)
-        const imagemFolga = "https://www.aviacionnews.com/wp-content/uploads/2024/10/327845_LATAM-7879_vw35-altB-Roll_HD-1223-1-1920x1080.jpg=80&w=1200&auto=format&fit=crop";
+        const imagemFolga = "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=1200&auto=format&fit=crop";
 
         function atualizarRelogio() {
             const agora = new Date();
@@ -169,6 +214,17 @@
             } catch (erro) {
                 document.getElementById('lista-voos').innerHTML = `<div class="folga-msg" style="color: #ef4444;">Erro ao carregar a escala.<br>Certifique-se de que o arquivo <b>escala.csv</b> está na mesma pasta.</div>`;
             }
+        }
+
+        function formataDataISO(dataObj) {
+            const ano = dataObj.getFullYear();
+            const mes = String(dataObj.getMonth() + 1).padStart(2, '0');
+            const dia = String(dataObj.getDate()).padStart(2, '0');
+            return `${ano}-${mes}-${dia}`;
+        }
+
+        function formataDataBR(dataObj) {
+            return `${String(dataObj.getDate()).padStart(2, '0')}/${String(dataObj.getMonth() + 1).padStart(2, '0')}`;
         }
 
         function processarEscala(csv) {
@@ -202,77 +258,159 @@
                 }
             }
 
-            verificarVoosDeHoje(escalaFormatada);
+            renderizarInterface(escalaFormatada);
         }
 
-        function verificarVoosDeHoje(escala) {
-            const hoje = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-            const ano = hoje.getFullYear();
-            const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-            const dia = String(hoje.getDate()).padStart(2, '0');
-            const dataHojeString = `${ano}-${mes}-${dia}`;
-            
-            const voosDeHoje = escala[dataHojeString];
-            const painelVoos = document.getElementById('lista-voos');
-            const painelVisual = document.getElementById('visualizacao-esquerda');
+        function calcularProximaFolga(escala, dataHojeStr) {
+            const datas = Object.keys(escala).sort();
+            let dataPrimeiraFolga = null;
+            let indexFolga = -1;
 
-            if (voosDeHoje && voosDeHoje.length > 0) {
-                let htmlVoos = '';
-                let temVooComercial = false;
-
-                for (const item of voosDeHoje) {
-                    if (["DO", "HSB", "ASB", "TREI"].includes(item.voo)) {
-                        let titulo = "";
-                        let icone = "";
-                        let classeCard = "";
-                        let descricao = "";
-
-                        if (item.voo === "DO") { 
-                            titulo = "Folga (DO)"; icone = "🏖️"; classeCard = "card-folga"; 
-                            descricao = "Dia livre! Aproveitando a folga.";
-                        } else if (item.voo === "HSB") { 
-                            titulo = "Sobreaviso (HSB)"; icone = "📱"; classeCard = "card-reserva";
-                            descricao = "Aguardando chamado em casa.";
-                        } else if (item.voo === "ASB") { 
-                            titulo = "Reserva (ASB)"; icone = "✈️"; classeCard = "card-reserva";
-                            descricao = "De prontidão no aeroporto.";
-                        } else if (item.voo === "TREI") { 
-                            titulo = "Treinamento (TREI)"; icone = "📚"; classeCard = "card-treino";
-                            descricao = "Dia de treinamento.";
-                        }
-
-                        htmlVoos += `
-                            <div class="voo-card ${classeCard}">
-                                <strong style="color: inherit;">${icone} ${titulo}</strong>
-                                <div>${descricao}</div>
-                            </div>
-                        `;
-                    } else {
-                        temVooComercial = true;
-                        // O link agora direciona para a página de dados do voo no FlightRadar24
-                        htmlVoos += `
-                            <div class="voo-card">
-                                <strong style="color: var(--azul-aviacao);">Voo ${item.voo}</strong>
-                                <div>🛫 <b>De:</b> ${item.origem} (${item.horarioPartida})</div>
-                                <div>🛬 <b>Para:</b> ${item.destino} (${item.horarioChegada})</div>
-                                <a href="https://www.flightradar24.com/data/flights/${item.voo}" target="_blank" class="btn-rastrear">Abrir no FlightRadar24</a>
-                            </div>
-                        `;
+            // Procura a próxima data (incluindo hoje) que tenha um evento "DO"
+            for (let i = 0; i < datas.length; i++) {
+                if (datas[i] >= dataHojeStr) {
+                    if (escala[datas[i]].some(e => e.voo === 'DO')) {
+                        dataPrimeiraFolga = datas[i];
+                        indexFolga = i;
+                        break;
                     }
                 }
+            }
 
-                painelVoos.innerHTML = htmlVoos;
+            if (!dataPrimeiraFolga) return null;
 
-                // Se houver voo comercial, mostra a foto do LATAM 787. Senão, mostra a imagem de folga.
-                if (temVooComercial) {
-                    painelVisual.innerHTML = `<img src="${imagemVoo}" alt="Aeronave em voo">`;
-                } else {
-                    painelVisual.innerHTML = `<img src="${imagemFolga}" alt="Imagem de dia livre">`;
+            // Calcula dias consecutivos de folga
+            let consecutivas = 1;
+            for (let i = indexFolga + 1; i < datas.length; i++) {
+                const [ano, mes, dia] = dataPrimeiraFolga.split('-');
+                const nextDate = new Date(ano, mes - 1, dia);
+                nextDate.setDate(nextDate.getDate() + consecutivas);
+                const nextDateStr = formataDataISO(nextDate);
+
+                if (datas[i] === nextDateStr && escala[datas[i]].some(e => e.voo === 'DO')) {
+                    consecutivas++;
+                } else if (datas[i] > nextDateStr) {
+                    break; 
+                } else if (datas[i] === nextDateStr) {
+                    break;
                 }
+            }
 
+            // Calcula a diferença de dias
+            const [anoHoje, mesHoje, diaHoje] = dataHojeStr.split('-');
+            const dataHojeObj = new Date(anoHoje, mesHoje - 1, diaHoje);
+            const [anoFolga, mesFolga, diaFolga] = dataPrimeiraFolga.split('-');
+            const dataFolgaObj = new Date(anoFolga, mesFolga - 1, diaFolga);
+            
+            const diffTime = Math.ceil((dataFolgaObj - dataHojeObj) / (1000 * 60 * 60 * 24));
+
+            return {
+                diasFaltando: diffTime,
+                consecutivas: consecutivas,
+                tipo: consecutivas === 1 ? "Monofolga" : "Folga dupla ou mais"
+            };
+        }
+
+        function gerarHTMLDia(titulo, dataObj, escala) {
+            const dataStr = formataDataISO(dataObj);
+            const eventos = escala[dataStr];
+            let html = `<div class="dia-bloco">`;
+            html += `<h3 class="dia-titulo">${titulo} <span style="color:#6b7280; font-size:1rem; font-weight:normal;">(${formataDataBR(dataObj)})</span></h3>`;
+
+            if (!eventos || eventos.length === 0) {
+                html += `<div class="voo-card card-vazio"><div style="color:#6b7280;">Sem eventos programados nesta data.</div></div></div>`;
+                return html;
+            }
+
+            for (const item of eventos) {
+                if (["DO", "HSB", "ASB", "TREI"].includes(item.voo)) {
+                    let tituloStatus = ""; let icone = ""; let classeCard = ""; let descricao = "";
+
+                    if (item.voo === "DO") { 
+                        tituloStatus = "Folga (DO)"; icone = "🏖️"; classeCard = "card-folga"; 
+                        descricao = "Dia livre! Aproveitando a folga.";
+                    } else if (item.voo === "HSB") { 
+                        tituloStatus = "Sobreaviso (HSB)"; icone = "📱"; classeCard = "card-reserva";
+                        descricao = item.origem ? `Aguardando chamado em: <b>${item.origem}</b><br>⏱️ Das ${item.horarioPartida} às ${item.horarioChegada}` : "Aguardando chamado em casa.";
+                    } else if (item.voo === "ASB") { 
+                        tituloStatus = "Reserva (ASB)"; icone = "✈️"; classeCard = "card-reserva";
+                        descricao = item.origem ? `De prontidão em: <b>${item.origem}</b><br>⏱️ Das ${item.horarioPartida} às ${item.horarioChegada}` : "De prontidão no aeroporto.";
+                    } else if (item.voo === "TREI") { 
+                        tituloStatus = "Treinamento (TREI)"; icone = "📚"; classeCard = "card-treino";
+                        descricao = "Dia de treinamento";
+                    }
+
+                    html += `
+                        <div class="voo-card ${classeCard}">
+                            <strong style="color: inherit;">${icone} ${tituloStatus}</strong>
+                            <div>${descricao}</div>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="voo-card">
+                            <strong style="color: var(--azul-aviacao);">Voo ${item.voo}</strong>
+                            <div>🛫 <b>De:</b> ${item.origem} (${item.horarioPartida})</div>
+                            <div>🛬 <b>Para:</b> ${item.destino} (${item.horarioChegada})</div>
+                            <a href="https://www.flightradar24.com/data/flights/${item.voo}" target="_blank" class="btn-rastrear">Abrir no FlightRadar24</a>
+                        </div>
+                    `;
+                }
+            }
+            html += `</div>`;
+            return html;
+        }
+
+        function renderizarInterface(escala) {
+            const hoje = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+            const dataHojeStr = formataDataISO(hoje);
+            
+            const ontem = new Date(hoje); ontem.setDate(hoje.getDate() - 1);
+            const amanha = new Date(hoje); amanha.setDate(hoje.getDate() + 1);
+
+            const painelVoos = document.getElementById('lista-voos');
+            const painelContador = document.getElementById('painel-contador');
+            const painelVisual = document.getElementById('visualizacao-esquerda');
+
+            // 1. Renderiza o Contador de Folgas
+            const infoFolga = calcularProximaFolga(escala, dataHojeStr);
+            if (infoFolga) {
+                if (infoFolga.diasFaltando === 0) {
+                    painelContador.innerHTML = `
+                        <div class="contador-folga">
+                            <h3>🎉 Você está de Folga Hoje!</h3>
+                            <p>Aproveite sua <b>${infoFolga.tipo}</b> (${infoFolga.consecutivas} dia${infoFolga.consecutivas > 1 ? 's' : ''}).</p>
+                        </div>
+                    `;
+                } else {
+                    const diasTexto = infoFolga.diasFaltando === 1 ? "Falta 1 dia" : `Faltam ${infoFolga.diasFaltando} dias`;
+                    painelContador.innerHTML = `
+                        <div class="contador-folga" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);">
+                            <h3>⏳ ${diasTexto} para a próxima folga!</h3>
+                            <p>Será uma <b>${infoFolga.tipo}</b> (${infoFolga.consecutivas} dia${infoFolga.consecutivas > 1 ? 's' : ''}).</p>
+                        </div>
+                    `;
+                }
             } else {
-                painelVoos.innerHTML = `<div class="folga-msg">Sem voos programados para hoje.<br><br><b>Aproveitando a folga!</b> ☕</div>`;
-                painelVisual.innerHTML = `<img src="${imagemFolga}" alt="Imagem de Folga">`;
+                painelContador.innerHTML = ``; // Nenhuma folga achada na escala
+            }
+
+            // 2. Renderiza a Escala (Ontem, Hoje, Amanhã)
+            let htmlEscala = "";
+            htmlEscala += gerarHTMLDia("Ontem", ontem, escala);
+            htmlEscala += gerarHTMLDia("🗓️ Hoje", hoje, escala);
+            htmlEscala += gerarHTMLDia("Amanhã", amanha, escala);
+            
+            painelVoos.innerHTML = htmlEscala;
+
+            // 3. Renderiza a Imagem (Baseado apenas no dia de HOJE)
+            const eventosHoje = escala[dataHojeStr] || [];
+            const temVooComercialHoje = eventosHoje.some(item => !["DO", "HSB", "ASB", "TREI"].includes(item.voo));
+
+            if (temVooComercialHoje) {
+                painelVisual.innerHTML = `<img src="${imagemVoo}" alt="Aeronave em voo">`;
+            } else {
+                painelVisual.innerHTML = `<img src="${imagemFolga}" alt="Imagem de dia livre">`;
             }
         }
 
