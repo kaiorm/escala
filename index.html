@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Escala de Voos do Kaio</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <style>
         :root {
             --azul-aviacao: #1e3a8a;
@@ -42,7 +43,7 @@
         }
         
         .container {
-            max-width: 800px; /* Reduzido para ficar elegante sem o painel lateral */
+            max-width: 800px;
             margin: 2rem auto;
             padding: 0 1.5rem;
         }
@@ -95,6 +96,19 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
+        }
+
+        .painel-jornada {
+            background-color: #e0f2fe; 
+            color: #0369a1; 
+            padding: 12px 15px; 
+            border-radius: 6px; 
+            margin-bottom: 1rem; 
+            font-weight: bold; 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 15px;
+            border-left: 4px solid #3b82f6;
         }
         
         .voo-card {
@@ -159,13 +173,12 @@
         <div class="escala-container">
             <div id="painel-contador"></div>
             <div id="lista-voos">
-                <div class="folga-msg">Carregando dados da escala...</div>
+                <div class="folga-msg">Lendo arquivo escala.xlsx... ✈️</div>
             </div>
         </div>
     </div>
 
     <script>
-        // Dicionário de Aeroportos Brasileiros baseado na IATA
         const dicionarioIATA = {
             "AJU": "Aracaju", "BEL": "Belém", "BPS": "Porto Seguro", "BSB": "Brasília", 
             "BVB": "Boa Vista", "CAC": "Cascavel", "CGB": "Cuiabá", "CGH": "São Paulo (Congonhas)", 
@@ -179,14 +192,26 @@
             "PNZ": "Petrolina", "POA": "Porto Alegre", "PVH": "Porto Velho", "RBR": "Rio Branco", 
             "REC": "Recife", "SDU": "Rio de Janeiro (Santos Dumont)", "SJP": "São José do Rio Preto", 
             "SLZ": "São Luís", "SSA": "Salvador", "THE": "Teresina", "UDI": "Uberlândia", 
-            "VCP": "Campinas", "VIX": "Vitória", "XAP": "Chapecó", "RAO": "Ribeirão Preto"
+            "VCP": "Campinas", "VIX": "Vitória", "XAP": "Chapecó", "RAO": "Ribeirão Preto", "JJG": "Jaguaruna"
         };
 
-        // Função que converte o código na cidade correspondente
         function formatarIATA(sigla) {
             if (!sigla) return "";
-            const codigo = sigla.trim().toUpperCase();
-            return dicionarioIATA[codigo] ? `${codigo} (${dicionarioIATA[codigo]})` : codigo;
+            let limpo = sigla.replace(/\(\+1\)|\(\+2\)/g, '').trim().toUpperCase();
+            return dicionarioIATA[limpo] ? `${limpo} (${dicionarioIATA[limpo]})` : limpo;
+        }
+
+        function formatarHoraExcel(valor) {
+            if (!valor && valor !== 0) return "";
+            
+            // Se o SheetJS ler a hora como decimal do Excel, convertemos para HH:MM
+            if (typeof valor === 'number') {
+                let totalMinutos = Math.round(valor * 24 * 60);
+                let horas = Math.floor(totalMinutos / 60);
+                let minutos = totalMinutos % 60;
+                return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
+            }
+            return valor.toString().trim();
         }
 
         function atualizarRelogio() {
@@ -197,14 +222,50 @@
         setInterval(atualizarRelogio, 1000);
         atualizarRelogio();
 
-        async function carregarCSV() {
+        function extrairHora(texto) {
+            if (!texto) return "";
+            let partes = texto.toString().trim().split(" ");
+            if (partes.length > 1) {
+                return partes[1];
+            }
+            return "";
+        }
+        
+        function extrairSigla(texto) {
+            if (!texto) return "";
+            return texto.toString().trim().split(" ")[0];
+        }
+
+        function normalizarDataExcel(valorData) {
+            if (!valorData) return null;
+            if (typeof valorData === 'number') {
+                const dataJS = new Date(Math.round((valorData - 25569) * 86400 * 1000));
+                return formataDataISO(dataJS);
+            }
+            const stringData = valorData.toString();
+            const regex = /(\d{4})-(\d{2})-(\d{2})/;
+            const match = stringData.match(regex);
+            if (match) {
+                return match[0]; 
+            }
+            return null;
+        }
+
+        async function carregarExcel() {
             try {
-                const resposta = await fetch('escala.csv?v=' + new Date().getTime());
-                if (!resposta.ok) throw new Error("Arquivo CSV não encontrado.");
-                const textoCsv = await resposta.text();
-                processarEscala(textoCsv);
+                const resposta = await fetch('escala.xlsx?v=' + new Date().getTime());
+                if (!resposta.ok) throw new Error("Arquivo não encontrado.");
+                
+                const arrayBuffer = await resposta.arrayBuffer();
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                const primeiraAba = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[primeiraAba];
+                
+                const jsonDados = XLSX.utils.sheet_to_json(worksheet, { range: 1 });
+                processarDadosApp(jsonDados);
             } catch (erro) {
-                document.getElementById('lista-voos').innerHTML = `<div class="folga-msg" style="color: #ef4444;">Erro ao carregar a escala.<br>Certifique-se de que o arquivo <b>escala.csv</b> está na mesma pasta.</div>`;
+                console.error(erro);
+                document.getElementById('lista-voos').innerHTML = `<div class="folga-msg" style="color: #ef4444;">Erro ao carregar a escala.<br>Certifique-se de que o arquivo baixado do app foi renomeado para <b>escala.xlsx</b> e está na mesma pasta.</div>`;
             }
         }
 
@@ -219,35 +280,67 @@
             return `${String(dataObj.getDate()).padStart(2, '0')}/${String(dataObj.getMonth() + 1).padStart(2, '0')}`;
         }
 
-        function processarEscala(csv) {
-            const linhas = csv.split('\n');
+        function processarDadosApp(jsonDados) {
             const escalaFormatada = {};
+            let dataAtual = "";
 
-            for (let i = 1; i < linhas.length; i++) {
-                if (!linhas[i].trim()) continue;
+            for (let i = 0; i < jsonDados.length; i++) {
+                const linha = jsonDados[i];
                 
-                const colunas = linhas[i].split(/[,;]/);
-                
-                if (colunas.length >= 2) { 
-                    const data = colunas[0].trim();
-                    const voo = colunas[1].trim().toUpperCase();
-                    const aeroPartida = colunas[2] ? colunas[2].trim() : "";
-                    const aeroChegada = colunas[3] ? colunas[3].trim() : "";
-                    const horaPartida = colunas[4] ? colunas[4].trim() : "";
-                    const horaChegada = colunas[5] ? colunas[5].trim().replace('\r', '') : "";
-                    
-                    if (!escalaFormatada[data]) {
-                        escalaFormatada[data] = [];
-                    }
-                    
-                    escalaFormatada[data].push({
-                        voo: voo,
-                        origem: aeroPartida,
-                        destino: aeroChegada,
-                        horarioPartida: horaPartida,
-                        horarioChegada: horaChegada
-                    });
+                const dataEncontrada = normalizarDataExcel(linha["Date"]);
+                if (dataEncontrada) {
+                    dataAtual = dataEncontrada;
                 }
+                
+                if (!dataAtual) continue;
+
+                // Inicializa a estrutura do dia com espaço para a apresentação e término
+                if (!escalaFormatada[dataAtual]) {
+                    escalaFormatada[dataAtual] = {
+                        eventos: [],
+                        apresentacao: "",
+                        termino: ""
+                    };
+                }
+
+                // Extrai a Apresentação e o Término, validando variações da planilha
+                let reportTime = formatarHoraExcel(linha["Duty Report"] || linha["Duty Report "]);
+                let debriefTime = formatarHoraExcel(linha["Duty Debrief"] || linha["Duty Debrief "]);
+
+                // Salva a primeira apresentação do dia
+                if (reportTime && !escalaFormatada[dataAtual].apresentacao) {
+                    escalaFormatada[dataAtual].apresentacao = reportTime;
+                }
+                // Vai atualizando o término para sempre pegar o último valor do dia
+                if (debriefTime) { 
+                    escalaFormatada[dataAtual].termino = debriefTime;
+                }
+
+                let atividadeOriginal = linha["Pairing/Activity"] ? linha["Pairing/Activity"].toString().trim().toUpperCase() : "";
+                let item = linha["Item"] ? linha["Item"].toString().trim().toUpperCase() : "";
+                let partidaTexto = linha["Dep Stn / Dep Time"] ? linha["Dep Stn / Dep Time"].toString() : "";
+                let chegadaTexto = linha["Arr. Stn / Arr. Time"] ? linha["Arr. Stn / Arr. Time"].toString() : "";
+
+                let vooOuStatus = "";
+                
+                if (atividadeOriginal === "DO" || atividadeOriginal === "DR") vooOuStatus = "DO";
+                else if (atividadeOriginal === "HSB" || atividadeOriginal === "HSBE") vooOuStatus = "HSB";
+                else if (atividadeOriginal === "ASB") vooOuStatus = "ASB";
+                else if (atividadeOriginal === "LENG" || atividadeOriginal === "TREI") vooOuStatus = "TREI";
+                
+                if (!vooOuStatus && item.startsWith("LA")) {
+                    vooOuStatus = item;
+                }
+
+                if (!vooOuStatus) continue;
+
+                escalaFormatada[dataAtual].eventos.push({
+                    voo: vooOuStatus,
+                    origem: extrairSigla(partidaTexto),
+                    destino: extrairSigla(chegadaTexto),
+                    horarioPartida: extrairHora(partidaTexto),
+                    horarioChegada: extrairHora(chegadaTexto)
+                });
             }
 
             renderizarInterface(escalaFormatada);
@@ -260,7 +353,8 @@
 
             for (let i = 0; i < datas.length; i++) {
                 if (datas[i] >= dataHojeStr) {
-                    if (escala[datas[i]].some(e => e.voo === 'DO')) {
+                    // Agora checamos dentro de .eventos
+                    if (escala[datas[i]].eventos.some(e => e.voo === 'DO')) {
                         dataPrimeiraFolga = datas[i];
                         indexFolga = i;
                         break;
@@ -277,7 +371,7 @@
                 nextDate.setDate(nextDate.getDate() + consecutivas);
                 const nextDateStr = formataDataISO(nextDate);
 
-                if (datas[i] === nextDateStr && escala[datas[i]].some(e => e.voo === 'DO')) {
+                if (datas[i] === nextDateStr && escala[datas[i]].eventos.some(e => e.voo === 'DO')) {
                     consecutivas++;
                 } else if (datas[i] > nextDateStr) {
                     break; 
@@ -302,17 +396,28 @@
 
         function gerarHTMLDia(titulo, dataObj, escala) {
             const dataStr = formataDataISO(dataObj);
-            const eventos = escala[dataStr];
+            const diaDados = escala[dataStr];
             let html = `<div class="dia-bloco">`;
             html += `<h3 class="dia-titulo">${titulo} <span style="color:#6b7280; font-size:1.1rem; font-weight:normal;">(${formataDataBR(dataObj)})</span></h3>`;
 
-            if (!eventos || eventos.length === 0) {
+            if (!diaDados || diaDados.eventos.length === 0) {
                 html += `<div class="voo-card card-vazio"><div style="color:#6b7280;">Sem eventos programados nesta data.</div></div></div>`;
                 return html;
             }
 
-            for (const item of eventos) {
-                // Aplica a nova formatação nos aeroportos
+            // Exibe a barra de jornada (Apresentação e Término) no topo do dia
+            if (diaDados.apresentacao || diaDados.termino) {
+                html += `<div class="painel-jornada">`;
+                if (diaDados.apresentacao) {
+                    html += `<span><span style="font-size:1.1rem;">⏱️</span> Apresentação: ${diaDados.apresentacao}</span>`;
+                }
+                if (diaDados.termino) {
+                    html += `<span><span style="font-size:1.1rem;">🏁</span> Término da Jornada: ${diaDados.termino}</span>`;
+                }
+                html += `</div>`;
+            }
+
+            for (const item of diaDados.eventos) {
                 const origemFormatada = formatarIATA(item.origem);
                 const destinoFormatado = formatarIATA(item.destino);
 
@@ -324,13 +429,13 @@
                         descricao = "Dia livre! Aproveitando a folga.";
                     } else if (item.voo === "HSB") { 
                         tituloStatus = "Sobreaviso (HSB)"; icone = "📱"; classeCard = "card-reserva";
-                        descricao = item.origem ? `Aguardando chamado em: <b>${origemFormatada}</b><br>⏱️ Das ${item.horarioPartida} às ${item.horarioChegada}` : "Aguardando chamado em casa.";
+                        descricao = item.origem ? `Aguardando chamado em: <b>${origemFormatada}</b><br>⏱️ Das ${item.horarioPartida} às ${item.horarioChegada}` : "Aguardando chamado.";
                     } else if (item.voo === "ASB") { 
                         tituloStatus = "Reserva (ASB)"; icone = "✈️"; classeCard = "card-reserva";
                         descricao = item.origem ? `De prontidão em: <b>${origemFormatada}</b><br>⏱️ Das ${item.horarioPartida} às ${item.horarioChegada}` : "De prontidão no aeroporto.";
                     } else if (item.voo === "TREI") { 
                         tituloStatus = "Treinamento (TREI)"; icone = "📚"; classeCard = "card-treino";
-                        descricao = "Dia de treinamento";
+                        descricao = item.origem ? `Capacitação em: <b>${origemFormatada}</b><br>⏱️ Das ${item.horarioPartida} às ${item.horarioChegada}` : "Dia de capacitação.";
                     }
 
                     html += `
@@ -364,7 +469,6 @@
             const painelVoos = document.getElementById('lista-voos');
             const painelContador = document.getElementById('painel-contador');
 
-            // Renderiza o Contador de Folgas
             const infoFolga = calcularProximaFolga(escala, dataHojeStr);
             if (infoFolga) {
                 if (infoFolga.diasFaltando === 0) {
@@ -387,7 +491,6 @@
                 painelContador.innerHTML = ``;
             }
 
-            // Renderiza a Escala (Ontem, Hoje, Amanhã)
             let htmlEscala = "";
             htmlEscala += gerarHTMLDia("Ontem", ontem, escala);
             htmlEscala += gerarHTMLDia("🗓️ Hoje", hoje, escala);
@@ -396,7 +499,7 @@
             painelVoos.innerHTML = htmlEscala;
         }
 
-        carregarCSV();
+        carregarExcel();
     </script>
 </body>
 </html>
